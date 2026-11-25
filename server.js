@@ -111,6 +111,69 @@ async function dnsChecks(hostname) {
   return result;
 }
 
+const IMPROVEMENTS = {
+  https: {
+    reference: { title: 'Mozilla Web Security Guidelines — Transport Layer', url: 'https://infosec.mozilla.org/guidelines/web_security#transport-layer' },
+    suggestion: 'Brug HTTPS på alle sider. Skaf et gratis certifikat (fx Let’s Encrypt) og omdirigér HTTP til HTTPS.',
+  },
+  tls: {
+    reference: { title: 'Mozilla TLS Configuration Guidelines', url: 'https://wiki.mozilla.org/Security/Server_Side_TLS' },
+    suggestion: 'Brug TLS 1.2+ (helst 1.3), et gyldigt certifikat fra en betroet CA og forny inden udløb. Deaktiver svage ciphers.',
+  },
+  'http-redirect': {
+    reference: { title: 'Mozilla Web Security Guidelines — Transport Layer', url: 'https://infosec.mozilla.org/guidelines/web_security#transport-layer' },
+    suggestion: 'Konfigurér webserveren til at svare 301/308 fra http:// til https:// for alle stier.',
+  },
+  reachable: {
+    reference: { title: 'NIS2-direktivet (EU) 2022/2555', url: 'https://eur-lex.europa.eu/eli/dir/2022/2555/oj' },
+    suggestion: 'Sørg for at siden er tilgængelig og returnerer 2xx/3xx. Overvåg uptime og fejl.',
+  },
+  hsts: {
+    reference: { title: 'OWASP HTTP Strict Transport Security Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html' },
+    suggestion: 'Tilføj header: `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`.',
+  },
+  csp: {
+    reference: { title: 'OWASP Content Security Policy Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html' },
+    suggestion: 'Tilføj en CSP, fx `Content-Security-Policy: default-src \'self\'; object-src \'none\'; base-uri \'self\'`.',
+  },
+  xfo: {
+    reference: { title: 'OWASP Secure Headers Project', url: 'https://owasp.org/www-project-secure-headers/' },
+    suggestion: 'Tilføj `X-Frame-Options: DENY` (eller `SAMEORIGIN`) for at forhindre clickjacking.',
+  },
+  xcto: {
+    reference: { title: 'OWASP Secure Headers Project', url: 'https://owasp.org/www-project-secure-headers/' },
+    suggestion: 'Tilføj `X-Content-Type-Options: nosniff`.',
+  },
+  referrer: {
+    reference: { title: 'OWASP Secure Headers Project', url: 'https://owasp.org/www-project-secure-headers/' },
+    suggestion: 'Tilføj `Referrer-Policy: strict-origin-when-cross-origin` (eller `no-referrer`).',
+  },
+  permissions: {
+    reference: { title: 'OWASP Secure Headers Project', url: 'https://owasp.org/www-project-secure-headers/' },
+    suggestion: 'Tilføj `Permissions-Policy` der deaktiverer ubrugte features, fx `camera=(), microphone=(), geolocation=()`.',
+  },
+  'server-disclosure': {
+    reference: { title: 'OWASP — Information Leakage', url: 'https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/01-Information_Gathering/02-Fingerprint_Web_Server' },
+    suggestion: 'Skjul `Server` og `X-Powered-By`-headers i webserver/konfiguration.',
+  },
+  cookies: {
+    reference: { title: 'OWASP Session Management Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html' },
+    suggestion: 'Sæt `Secure; HttpOnly; SameSite=Lax` (eller Strict) på alle cookies.',
+  },
+  spf: {
+    reference: { title: 'RFC 7208 — Sender Policy Framework', url: 'https://www.rfc-editor.org/rfc/rfc7208' },
+    suggestion: 'Opret en TXT-record på domænet: `v=spf1 ... -all` (begræns afsendere).',
+  },
+  dmarc: {
+    reference: { title: 'RFC 7489 — DMARC', url: 'https://www.rfc-editor.org/rfc/rfc7489' },
+    suggestion: 'Opret `_dmarc.<domæne>` TXT: `v=DMARC1; p=quarantine; rua=mailto:...`.',
+  },
+  'security-txt': {
+    reference: { title: 'RFC 9116 — security.txt', url: 'https://www.rfc-editor.org/rfc/rfc9116' },
+    suggestion: 'Opret `/.well-known/security.txt` med kontaktinfo for sårbarhedsrapportering.',
+  },
+};
+
 async function scan(targetUrl) {
   const normalized = normalizeUrl(targetUrl);
   const parsed = new URL(normalized);
@@ -333,6 +396,11 @@ async function scan(targetUrl) {
   else if (score >= 45) grade = 'D';
   else if (score >= 30) grade = 'E';
 
+  const enrichedChecks = checks.map((c) => {
+    const imp = IMPROVEMENTS[c.id] || {};
+    return { ...c, reference: imp.reference || null, suggestion: imp.suggestion || '' };
+  });
+
   return {
     url: normalized,
     hostname,
@@ -340,7 +408,7 @@ async function scan(targetUrl) {
     grade,
     totalWeight,
     earned,
-    checks,
+    checks: enrichedChecks,
     dns: dnsr,
     tls: tlsData,
     headers,

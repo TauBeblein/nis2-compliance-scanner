@@ -22,4 +22,8 @@ button:disabled { opacity: 0.5; }
 .check .title { font-weight: 600; }
 .check .cat { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
 .check .detail { font-size: 0.9rem; color: #cbd5e1; margin-top: 4px; }
-.grade-A { color: #22c55e; } .grade-B { color: #84cc16; } .grade-C { color: #eab308; } .grade-D { color: #f97316; } .grade-E { color: #ef4444; } .grade-F { color: #ef4444; }
+.check .suggestion { margin-top: 6px; font-size: 0.85rem; color: #cbd5e1; background: #0f172a; padding: 8px; border-radius: 6px; }
+.check .suggestion.ok { color: #86efac; }
+.check .ref { margin-top: 4px; font-size: 0.8rem; }
+.check .ref a { color: #60a5fa; text-decoration: none; }
+.check .ref a:hover { text-decoration: underline; }

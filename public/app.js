@@ -40,7 +40,14 @@ function render(data) {
   data.checks.forEach((c) => {
     const div = document.createElement('div');
     div.className = 'check ' + (c.pass ? 'pass' : 'fail');
-    div.innerHTML = `<div class="cat">${c.category}</div><div class="title">${c.pass ? '✓' : '✗'} ${c.title}</div><div class="detail">${escapeHtml(c.detail)}</div>`;
+    let html = `<div class="cat">${c.category}</div><div class="title">${c.pass ? '✓' : '✗'} ${escapeHtml(c.title)}</div><div class="detail">${escapeHtml(c.detail)}</div>`;
+    if (c.suggestion) {
+      html += `<div class="suggestion ${c.pass ? 'ok' : ''}"><strong>Forslag:</strong> ${escapeHtml(c.suggestion)}</div>`;
+    }
+    if (c.reference) {
+      html += `<div class="ref">Reference: <a href="${c.reference.url}" target="_blank" rel="noopener">${escapeHtml(c.reference.title)}</a></div>`;
+    }
+    div.innerHTML = html;
     checksEl.appendChild(div);
   });
   result.classList.remove('hidden');
