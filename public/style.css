@@ -1,0 +1,25 @@
+* { box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; background: #0f172a; color: #e2e8f0; }
+header { padding: 24px 16px; text-align: center; }
+h1 { margin: 0 0 8px; font-size: 1.6rem; }
+.subtitle { color: #94a3b8; margin: 0; font-size: 0.95rem; }
+main { max-width: 800px; margin: 0 auto; padding: 16px; }
+form { display: flex; gap: 8px; margin-bottom: 16px; }
+input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 1rem; }
+button { padding: 12px 20px; border-radius: 8px; border: none; background: #3b82f6; color: white; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: 0.5; }
+#loading { text-align: center; padding: 16px; color: #94a3b8; }
+#error { background: #7f1d1d; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+.hidden { display: none; }
+.scorecard { display: flex; align-items: center; gap: 20px; background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 16px; }
+.grade { font-size: 3rem; font-weight: 800; width: 72px; text-align: center; }
+.score { font-size: 1.4rem; font-weight: 700; }
+.meta { color: #94a3b8; font-size: 0.9rem; }
+.note { font-size: 0.85rem; color: #94a3b8; background: #1e293b; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+.check { background: #1e293b; padding: 12px 14px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #334155; }
+.check.pass { border-left-color: #22c55e; }
+.check.fail { border-left-color: #ef4444; }
+.check .title { font-weight: 600; }
+.check .cat { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+.check .detail { font-size: 0.9rem; color: #cbd5e1; margin-top: 4px; }
+.grade-A { color: #22c55e; } .grade-B { color: #84cc16; } .grade-C { color: #eab308; } .grade-D { color: #f97316; } .grade-E { color: #ef4444; } .grade-F { color: #ef4444; }

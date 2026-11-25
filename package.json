@@ -1,0 +1,10 @@
+{
+  "name": "nis2-compliance-scanner",
+  "version": "1.0.0",
+  "description": "NIS2 (NIC2) compliance scanner: given a URL, assess public-facing web security posture.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "private": true
+}

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NIS2 Compliance Scanner</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>NIS2 Compliance Scanner</h1>
+  <p class="subtitle">Indtast en URL og vurdér den offentlige web-sikkerhedsposture mod NIS2-relevante tekniske foranstaltninger.</p>
+</header>
+<main>
+  <form id="scanForm">
+    <input id="urlInput" type="text" placeholder="https://eksempel.dk" required>
+    <button type="submit" id="scanBtn">Scan</button>
+  </form>
+  <div id="loading" class="hidden">Scanner... (kan tage op til 20 sek.)</div>
+  <div id="error" class="hidden"></div>
+  <section id="result" class="hidden">
+    <div class="scorecard">
+      <div class="grade" id="grade"></div>
+      <div>
+        <div class="score" id="score"></div>
+        <div class="meta" id="meta"></div>
+      </div>
+    </div>
+    <p class="note">Bemærk: En URL-scanner kan kun vurdere den offentlige web-sikkerhedsposture (TLS, headers, cookies, DNS). Fuldt NIS2-compliance kræver organisatoriske foranstaltninger, risikostyring, hændelsesrapportering m.m., som ikke kan verificeres via en URL.</p>
+    <div id="checks"></div>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
