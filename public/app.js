@@ -78,5 +78,4 @@ document.getElementById('historyBtn').addEventListener('click', () => {
   let hist = [];
   try { hist = JSON.parse(localStorage.getItem('nis2hist') || '[]'); } catch (e) {}
   el.innerHTML = hist.length ? hist.map(h => `<div>${escapeHtml(h.url)} — ${h.score}/100 (${h.grade}) <span style="color:#64748b">${new Date(h.at).toLocaleString()}</span></div>`).join('') : 'Ingen historik endnu.';
-  el.classList.remove('hidden');
-});
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
