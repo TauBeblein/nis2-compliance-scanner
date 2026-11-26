@@ -26,8 +26,13 @@
         <div class="meta" id="meta"></div>
       </div>
     </div>
+    <div class="actions">
+      <button type="button" id="exportBtn">Eksportér JSON</button>
+      <button type="button" id="historyBtn">Vis historik</button>
+    </div>
     <p class="note">Bemærk: En URL-scanner kan kun vurdere den offentlige web-sikkerhedsposture (TLS, headers, cookies, DNS). Fuldt NIS2-compliance kræver organisatoriske foranstaltninger, risikostyring, hændelsesrapportering m.m., som ikke kan verificeres via en URL.</p>
     <div id="checks"></div>
+    <div id="history" class="hidden"></div>
   </section>
 </main>
 <script src="/app.js"></script>

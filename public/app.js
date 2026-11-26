@@ -5,6 +5,8 @@ const loading = document.getElementById('loading');
 const error = document.getElementById('error');
 const result = document.getElementById('result');
 
+let lastData = null;
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   error.classList.add('hidden');
@@ -30,6 +32,13 @@ form.addEventListener('submit', async (e) => {
 });
 
 function render(data) {
+  lastData = data;
+  // save history
+  try {
+    const hist = JSON.parse(localStorage.getItem('nis2hist') || '[]');
+    hist.unshift({ url: data.url, score: data.score, grade: data.grade, at: data.scannedAt });
+    localStorage.setItem('nis2hist', JSON.stringify(hist.slice(0, 10)));
+  } catch (e) {}
   const gradeEl = document.getElementById('grade');
   gradeEl.textContent = data.grade;
   gradeEl.className = 'grade grade-' + data.grade;
@@ -53,4 +62,21 @@ function render(data) {
   result.classList.remove('hidden');
 }
 
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (!lastData) return;
+  const blob = new Blob([JSON.stringify(lastData, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'nis2-report.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById('historyBtn').addEventListener('click', () => {
+  const el = document.getElementById('history');
+  if (!el.classList.contains('hidden')) { el.classList.add('hidden'); return; }
+  let hist = [];
+  try { hist = JSON.parse(localStorage.getItem('nis2hist') || '[]'); } catch (e) {}
+  el.innerHTML = hist.length ? hist.map(h => `<div>${escapeHtml(h.url)} — ${h.score}/100 (${h.grade}) <span style="color:#64748b">${new Date(h.at).toLocaleString()}</span></div>`).join('') : 'Ingen historik endnu.';
+  el.classList.remove('hidden');
+});

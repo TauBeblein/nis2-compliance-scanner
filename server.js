@@ -228,6 +228,38 @@ const IMPROVEMENTS = {
     reference: { title: 'MDN — Cookie prefixes', url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#cookie_prefixes' },
     suggestion: 'Brug `__Host-` eller `__Secure-` præfiks på sikkerhedsrelevante cookies.',
   },
+  caa: {
+    reference: { title: 'RFC 8659 — CAA', url: 'https://www.rfc-editor.org/rfc/rfc8659' },
+    suggestion: 'Opret en CAA DNS-record der begrænser hvilke CA’er må udstede certifikater for domænet.',
+  },
+  'hsts-maxage': {
+    reference: { title: 'OWASP HSTS Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html' },
+    suggestion: 'Sæt HSTS `max-age` til mindst 31536000 (1 år).',
+  },
+  'csp-unsafe': {
+    reference: { title: 'OWASP CSP Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html' },
+    suggestion: 'Fjern `unsafe-inline` og `unsafe-eval` fra CSP; brug nonces/hashes i stedet.',
+  },
+  'csp-frame-ancestors': {
+    reference: { title: 'OWASP CSP Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html' },
+    suggestion: 'Tilføj `frame-ancestors \'none\'` (eller `self`) til CSP.',
+  },
+  'cors-wildcard': {
+    reference: { title: 'OWASP CORS', url: 'https://owasp.org/www-community/attacks/CORS_OriginHeaderScrutiny' },
+    suggestion: 'Undgå `Access-Control-Allow-Origin: *` på endpoints med credentials; angiv eksplicitte origins.',
+  },
+  'cache-control': {
+    reference: { title: 'OWASP Secure Headers Project', url: 'https://owasp.org/www-project-secure-headers/' },
+    suggestion: 'Sæt `Cache-Control: no-store` på sider med session/brugerdata.',
+  },
+  'mta-sts': {
+    reference: { title: 'RFC 8461 — MTA-STS', url: 'https://www.rfc-editor.org/rfc/rfc8461' },
+    suggestion: 'Publicér `_mta-sts.<domæne>` TXT og en MTA-STS-policy for sikker mailtransport.',
+  },
+  tlsrpt: {
+    reference: { title: 'RFC 8460 — TLSRPT', url: 'https://www.rfc-editor.org/rfc/rfc8460' },
+    suggestion: 'Publicér `_smtp._tls.<domæne>` TXT med `v=TLSRPTv1; rua=mailto:...`.',
+  },
 };
 
 async function scan(targetUrl) {
@@ -527,6 +559,56 @@ async function scan(targetUrl) {
   }
   checks.push({ id: 'cookie-prefix', title: 'Cookie-præfikser (__Host-/__Secure-)', category: 'Cookies', pass: cookies.length === 0 ? true : prefixOk, detail: cookies.length === 0 ? 'Ingen cookies.' : (prefixOk ? 'Alle cookies bruger sikre præfikser.' : 'Nogle cookies mangler sikre præfikser.'), weight: 4 });
 
+  // CAA
+  let caaOk = false;
+  try {
+    const r = await dns.resolve(hostname, 'CAA');
+    caaOk = Array.isArray(r) && r.length > 0;
+  } catch (e) { caaOk = false; }
+  checks.push({ id: 'caa', title: 'DNS CAA-record', category: 'DNS-sikkerhed', pass: caaOk, detail: caaOk ? 'CAA fundet.' : 'Ingen CAA-record fundet.', weight: 4 });
+
+  // HSTS max-age
+  let hstsMaxAgeOk = false;
+  if (hsts) {
+    const m = hsts.match(/max-age=(\d+)/i);
+    hstsMaxAgeOk = !!m && parseInt(m[1]) >= 31536000;
+  }
+  checks.push({ id: 'hsts-maxage', title: 'HSTS max-age ≥ 1 år', category: 'Sikkerhedsheaders', pass: hstsMaxAgeOk, detail: hsts ? `HSTS: ${hsts}` : 'HSTS mangler.', weight: 4 });
+
+  // CSP unsafe
+  const cspUnsafe = !!csp && /unsafe-(inline|eval)/i.test(csp);
+  checks.push({ id: 'csp-unsafe', title: 'CSP uden unsafe-inline/eval', category: 'Sikkerhedsheaders', pass: !!csp && !cspUnsafe, detail: csp ? (cspUnsafe ? 'CSP indeholder unsafe-inline/eval.' : 'CSP ser sikker ud.') : 'CSP mangler.', weight: 5 });
+
+  // CSP frame-ancestors
+  const cspFA = !!csp && /frame-ancestors/i.test(csp);
+  checks.push({ id: 'csp-frame-ancestors', title: 'CSP frame-ancestors sat', category: 'Sikkerhedsheaders', pass: cspFA, detail: cspFA ? 'frame-ancestors sat.' : 'frame-ancestors mangler.', weight: 4 });
+
+  // CORS wildcard
+  const acao = h('access-control-allow-origin');
+  const corsWildcard = acao === '*';
+  checks.push({ id: 'cors-wildcard', title: 'CORS ikke wildcard (*)', category: 'Sikkerhedsheaders', pass: !corsWildcard, detail: acao ? `ACAO: ${acao}` : 'Ingen CORS-header.', weight: 4 });
+
+  // Cache-Control
+  const cc = h('cache-control') || '';
+  const cacheOk = /no-store/i.test(cc);
+  checks.push({ id: 'cache-control', title: 'Cache-Control: no-store', category: 'Sikkerhedsheaders', pass: cacheOk, detail: cc ? `Cache-Control: ${cc}` : 'Cache-Control mangler.', weight: 4 });
+
+  // MTA-STS
+  let mtaSts = false;
+  try {
+    const r = await dns.resolveTxt('_mta-sts.' + hostname);
+    mtaSts = Array.isArray(r) && r.length > 0;
+  } catch (e) { mtaSts = false; }
+  checks.push({ id: 'mta-sts', title: 'MTA-STS (mail)', category: 'DNS-sikkerhed', pass: mtaSts, detail: mtaSts ? 'MTA-STS fundet.' : 'Ingen MTA-STS.', weight: 3 });
+
+  // TLSRPT
+  let tlsrpt = false;
+  try {
+    const r = await dns.resolveTxt('_smtp._tls.' + hostname);
+    tlsrpt = Array.isArray(r) && r.length > 0;
+  } catch (e) { tlsrpt = false; }
+  checks.push({ id: 'tlsrpt', title: 'TLS-RPT (mail)', category: 'DNS-sikkerhed', pass: tlsrpt, detail: tlsrpt ? 'TLS-RPT fundet.' : 'Ingen TLS-RPT.', weight: 3 });
+
   // Score
   const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
   const earned = checks.reduce((s, c) => s + (c.pass ? c.weight : 0), 0);
@@ -559,12 +641,49 @@ async function scan(targetUrl) {
   };
 }
 
+const rateLimit = new Map();
+function checkRate(ip) {
+  const now = Date.now();
+  const window = 60000;
+  const max = 10;
+  const arr = (rateLimit.get(ip) || []).filter((t) => now - t < window);
+  if (arr.length >= max) return false;
+  arr.push(now);
+  rateLimit.set(ip, arr);
+  return true;
+}
+
+function isPrivateHost(hostname) {
+  // block obvious local/private names
+  if (hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.internal')) return true;
+  // IPv4
+  const m = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a,b] = [parseInt(m[1]), parseInt(m[2])];
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+  }
+  return false;
+}
+
 const server = http.createServer(async (req, res) => {
+  const ip = req.socket.remoteAddress || 'unknown';
   if (req.method === 'POST' && req.url === '/api/scan') {
+    if (!checkRate(ip)) { res.statusCode = 429; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({error:'Too many requests'})); return; }
     const body = await readBody(req);
     let payload = {};
     try { payload = JSON.parse(body); } catch (e) {}
     if (!payload.url) { res.statusCode = 400; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: 'url required' })); return; }
+    let normalized;
+    try { normalized = normalizeUrl(payload.url); } catch (e) { res.statusCode = 400; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({error:'invalid url'})); return; }
+    let parsed;
+    try { parsed = new URL(normalized); } catch (e) { res.statusCode = 400; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({error:'invalid url'})); return; }
+    if (!['http:','https:'].includes(parsed.protocol)) { res.statusCode = 400; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({error:'only http/https allowed'})); return; }
+    if (isPrivateHost(parsed.hostname)) { res.statusCode = 400; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({error:'private/local hosts are not allowed'})); return; }
     try {
       const result = await scan(payload.url);
       res.setHeader('Content-Type', 'application/json');

@@ -26,4 +26,6 @@ button:disabled { opacity: 0.5; }
 .check .suggestion.ok { color: #86efac; }
 .check .ref { margin-top: 4px; font-size: 0.8rem; }
 .check .ref a { color: #60a5fa; text-decoration: none; }
-.check .ref a:hover { text-decoration: underline; }
+.actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.actions button { background: #334155; }
+#history { background: #1e293b; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 0.85rem; }
