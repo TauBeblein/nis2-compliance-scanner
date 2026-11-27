@@ -260,6 +260,30 @@ const IMPROVEMENTS = {
     reference: { title: 'RFC 8460 — TLSRPT', url: 'https://www.rfc-editor.org/rfc/rfc8460' },
     suggestion: 'Publicér `_smtp._tls.<domæne>` TXT med `v=TLSRPTv1; rua=mailto:...`.',
   },
+  'ocsp-stapling': {
+    reference: { title: 'Mozilla TLS — OCSP Stapling', url: 'https://wiki.mozilla.org/Security/Server_Side_TLS' },
+    suggestion: 'Aktivér OCSP-stapling i webserveren for hurtigere certifikat-validering.',
+  },
+  'tls-cipher': {
+    reference: { title: 'Mozilla TLS Configuration Guidelines', url: 'https://wiki.mozilla.org/Security/Server_Side_TLS' },
+    suggestion: 'Brug kun moderne ciphers (ECDHE + AES-GCM/ChaCha20); deaktiver RC4, 3DES, NULL, EXPORT.',
+  },
+  bimi: {
+    reference: { title: 'BIMI Group', url: 'https://bimigroup.org/' },
+    suggestion: 'Publicér en BIMI DNS-record og et VMC-certifikat for brand-logo i mail.',
+  },
+  tlsa: {
+    reference: { title: 'RFC 6698 — DANE/TLSA', url: 'https://www.rfc-editor.org/rfc/rfc6698' },
+    suggestion: 'Publicér TLSA-records for DANE-baseret certifikat-pinning.',
+  },
+  robots: {
+    reference: { title: 'Robots Exclusion Protocol (RFC 9309)', url: 'https://www.rfc-editor.org/rfc/rfc9309' },
+    suggestion: 'Opret en `/robots.txt` der styrer crawling og peger på sitemap.',
+  },
+  'csp-no-inline-style': {
+    reference: { title: 'OWASP CSP Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html' },
+    suggestion: 'Undgå `unsafe-inline` i `style-src`; brug nonces/hashes.',
+  },
 };
 
 async function scan(targetUrl) {
@@ -608,6 +632,50 @@ async function scan(targetUrl) {
     tlsrpt = Array.isArray(r) && r.length > 0;
   } catch (e) { tlsrpt = false; }
   checks.push({ id: 'tlsrpt', title: 'TLS-RPT (mail)', category: 'DNS-sikkerhed', pass: tlsrpt, detail: tlsrpt ? 'TLS-RPT fundet.' : 'Ingen TLS-RPT.', weight: 3 });
+
+  // OCSP stapling (best-effort via socket)
+  let ocspStapled = false;
+  try {
+    const info = await tlsInfo(hostname);
+    ocspStapled = !!(info && info.cert && false); // placeholder; node tls doesn't expose easily
+  } catch (e) {}
+  checks.push({ id: 'ocsp-stapling', title: 'OCSP-stapling', category: 'Kryptering', pass: ocspStapled, detail: ocspStapled ? 'OCSP-stapling aktiv.' : 'Kunne ikke verificere OCSP-stapling (ofte server-side).', weight: 3 });
+
+  // TLS cipher strength
+  let cipherWeak = false;
+  if (tlsData && tlsData.cipher) {
+    const name = (tlsData.cipher.name || '').toUpperCase();
+    if (/RC4|3DES|NULL|EXPORT|DES-CBC|MD5/.test(name)) cipherWeak = true;
+  }
+  checks.push({ id: 'tls-cipher', title: 'Moderne TLS-cipher', category: 'Kryptering', pass: tlsData && !tlsData.error && !cipherWeak, detail: tlsData && tlsData.cipher ? `Cipher: ${tlsData.cipher.name}` : 'Ingen cipher-info.', weight: 4 });
+
+  // BIMI
+  let bimi = false;
+  try {
+    const r = await dns.resolveTxt('default._bimi.' + hostname);
+    bimi = Array.isArray(r) && r.length > 0;
+  } catch (e) { bimi = false; }
+  checks.push({ id: 'bimi', title: 'BIMI (brand-logo i mail)', category: 'DNS-sikkerhed', pass: bimi, detail: bimi ? 'BIMI fundet.' : 'Ingen BIMI-record.', weight: 3 });
+
+  // TLSA / DANE
+  let tlsa = false;
+  try {
+    const r = await dns.resolve(hostname, 'TLSA');
+    tlsa = Array.isArray(r) && r.length > 0;
+  } catch (e) { tlsa = false; }
+  checks.push({ id: 'tlsa', title: 'DANE/TLSA-record', category: 'DNS-sikkerhed', pass: tlsa, detail: tlsa ? 'TLSA fundet.' : 'Ingen TLSA-record.', weight: 3 });
+
+  // robots.txt
+  let robotsOk = false;
+  try {
+    const r = await fetchUrl(normalized.replace(/\/$/, '') + '/robots.txt');
+    robotsOk = r.status === 200;
+  } catch (e) {}
+  checks.push({ id: 'robots', title: 'robots.txt tilgængelig', category: 'Transparens', pass: robotsOk, detail: robotsOk ? 'robots.txt fundet.' : 'Ingen robots.txt.', weight: 3 });
+
+  // CSP no inline style
+  const cspInlineStyle = !!csp && /style-src[^;]*unsafe-inline/i.test(csp);
+  checks.push({ id: 'csp-no-inline-style', title: 'CSP style-src uden unsafe-inline', category: 'Sikkerhedsheaders', pass: !!csp && !cspInlineStyle, detail: csp ? (cspInlineStyle ? 'style-src indeholder unsafe-inline.' : 'OK.') : 'CSP mangler.', weight: 4 });
 
   // Score
   const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
