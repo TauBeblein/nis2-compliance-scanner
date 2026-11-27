@@ -309,6 +309,34 @@ const IMPROVEMENTS = {
     reference: { title: 'RFC 6376 — DKIM', url: 'https://www.rfc-editor.org/rfc/rfc6376' },
     suggestion: 'Publicér DKIM DNS-record (`<selector>._domainkey.<domæne>`) og signer udgående mail.',
   },
+  'git-exposure': {
+    reference: { title: 'OWASP — Sensitive Data Exposure', url: 'https://owasp.org/www-project-web-security-testing-guide/' },
+    suggestion: 'Bloker adgang til `/.git/` og fjern .git fra produktionsserveren.',
+  },
+  'env-exposure': {
+    reference: { title: 'OWASP — Sensitive Data Exposure', url: 'https://owasp.org/www-project-web-security-testing-guide/' },
+    suggestion: 'Bloker adgang til `/.env` og andre hemmelige filer.',
+  },
+  nel: {
+    reference: { title: 'MDN — NEL', url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/NEL' },
+    suggestion: 'Tilføj `NEL` + `Report-To` headers for fejlrapportering.',
+  },
+  'report-to': {
+    reference: { title: 'MDN — Report-To', url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Report-To' },
+    suggestion: 'Konfigurér `Report-To` endpoint for CSP/NEL-rapporter.',
+  },
+  'partitioned-cookie': {
+    reference: { title: 'MDN — Partitioned cookies (CHIPS)', url: 'https://developer.mozilla.org/en-US/docs/Web/Privacy/Privacy_sandbox/Partitioned_cookies' },
+    suggestion: 'Tilføj `Partitioned` til third-party cookies (CHIPS).',
+  },
+  ipv6: {
+    reference: { title: 'IPv6 — IETF', url: 'https://www.ietf.org/' },
+    suggestion: 'Publicér en AAAA-record for IPv6-understøttelse.',
+  },
+  'dmarc-reporting': {
+    reference: { title: 'RFC 7489 — DMARC', url: 'https://www.rfc-editor.org/rfc/rfc7489' },
+    suggestion: 'Tilføj `rua=` (og evt. `ruf=`) til DMARC for modtagelse af rapporter.',
+  },
 };
 
 async function scan(targetUrl) {
@@ -723,14 +751,61 @@ async function scan(targetUrl) {
   const csd = h('clear-site-data');
   checks.push({ id: 'clear-site-data', title: 'Clear-Site-Data header', category: 'Session', pass: !!csd, detail: csd ? `Clear-Site-Data: ${csd}` : 'Clear-Site-Data mangler.', weight: 2 });
 
-  // DKIM
-  let dkim = false;
+  // .git exposure
+  let gitExposed = false;
   try {
-    // try common selector
-    const r = await dns.resolveTxt('default._domainkey.' + hostname);
-    dkim = Array.isArray(r) && r.length > 0;
-  } catch (e) { dkim = false; }
-  checks.push({ id: 'dkim', title: 'DKIM (mail)', category: 'DNS-sikkerhed', pass: dkim, detail: dkim ? 'DKIM fundet.' : 'Ingen DKIM (selector "default").', weight: 3 });
+    const r = await fetchUrl(normalized.replace(/\/$/, '') + '/.git/HEAD');
+    gitExposed = r.status === 200 && r.body && r.body.includes('ref:');
+  } catch (e) {}
+  checks.push({ id: 'git-exposure', title: '.git ikke eksponeret', category: 'Konfiguration', pass: !gitExposed, detail: gitExposed ? '.git/HEAD er tilgængelig!' : 'Ingen .git-eksponering.', weight: 5 });
+
+  // .env exposure
+  let envExposed = false;
+  try {
+    const r = await fetchUrl(normalized.replace(/\/$/, '') + '/.env');
+    envExposed = r.status === 200 && r.body && /=/.test(r.body);
+  } catch (e) {}
+  checks.push({ id: 'env-exposure', title: '.env ikke eksponeret', category: 'Konfiguration', pass: !envExposed, detail: envExposed ? '.env er tilgængelig!' : 'Ingen .env-eksponering.', weight: 5 });
+
+  // NEL
+  const nel = h('nel');
+  checks.push({ id: 'nel', title: 'NEL header', category: 'Sikkerhedsheaders', pass: !!nel, detail: nel ? `NEL: ${nel}` : 'NEL mangler.', weight: 2 });
+
+  // Report-To
+  const reportTo = h('report-to');
+  checks.push({ id: 'report-to', title: 'Report-To header', category: 'Sikkerhedsheaders', pass: !!reportTo, detail: reportTo ? 'Report-To sat.' : 'Report-To mangler.', weight: 2 });
+
+  // Partitioned cookies
+  let partitionedOk = true;
+  if (cookies.length > 0) {
+    // only flag if any cookie is third-party style? We'll just check if Partitioned present on at least one
+    partitionedOk = cookies.some((c) => /partitioned/i.test(c));
+  } else {
+    partitionedOk = true;
+  }
+  checks.push({ id: 'partitioned-cookie', title: 'Partitioned cookies (CHIPS)', category: 'Cookies', pass: cookies.length === 0 ? true : partitionedOk, detail: cookies.length === 0 ? 'Ingen cookies.' : (partitionedOk ? 'Partitioned anvendt.' : 'Ingen Partitioned cookies (relevant for third-party).'), weight: 2 });
+
+  // IPv6
+  let ipv6 = false;
+  try {
+    const r = await dns.resolve6(hostname);
+    ipv6 = Array.isArray(r) && r.length > 0;
+  } catch (e) { ipv6 = false; }
+  checks.push({ id: 'ipv6', title: 'IPv6 (AAAA-record)', category: 'DNS-sikkerhed', pass: ipv6, detail: ipv6 ? 'AAAA fundet.' : 'Ingen AAAA-record.', weight: 2 });
+
+  // DMARC reporting
+  const dmarcReporting = dnsr.dmarc ? /rua=/i.test(dnsr.dmarc) : false;
+  checks.push({ id: 'dmarc-reporting', title: 'DMARC med rua (rapportering)', category: 'DNS-sikkerhed', pass: dmarcReporting, detail: dnsr.dmarc ? dnsr.dmarc : 'Ingen DMARC.', weight: 3 });
+
+  // DKIM auto-discovery (common selectors)
+  let dkimFound = false;
+  for (const sel of ['default', 'selector1', 'selector2', 'google', 'k1']) {
+    try {
+      const r = await dns.resolveTxt(sel + '._domainkey.' + hostname);
+      if (Array.isArray(r) && r.length > 0) { dkimFound = true; break; }
+    } catch (e) {}
+  }
+  checks.push({ id: 'dkim', title: 'DKIM (mail)', category: 'DNS-sikkerhed', pass: dkimFound, detail: dkimFound ? 'DKIM fundet.' : 'Ingen DKIM (almindelige selectors).', weight: 3 });
 
   // Score
   const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
