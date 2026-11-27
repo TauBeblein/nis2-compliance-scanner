@@ -763,7 +763,9 @@ async function scan(targetUrl) {
   let envExposed = false;
   try {
     const r = await fetchUrl(normalized.replace(/\/$/, '') + '/.env');
-    envExposed = r.status === 200 && r.body && /=/.test(r.body);
+    const body = r.body || '';
+    const looksLikeEnv = /^[A-Z][A-Z0-9_]*\s*=/m.test(body) && !/<html|<!DOCTYPE/i.test(body);
+    envExposed = r.status === 200 && looksLikeEnv;
   } catch (e) {}
   checks.push({ id: 'env-exposure', title: '.env ikke eksponeret', category: 'Konfiguration', pass: !envExposed, detail: envExposed ? '.env er tilgængelig!' : 'Ingen .env-eksponering.', weight: 5 });
 
