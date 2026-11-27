@@ -75,6 +75,7 @@ function tlsInfo(hostname) {
         authorized: socket.authorized,
         authorizationError: socket.authorizationError,
         protocol: socket.getProtocol(),
+        alpn: socket.alpnProtocol,
         cipher: socket.getCipher(),
         cert: cert ? {
           subject: cert.subject,
@@ -283,6 +284,30 @@ const IMPROVEMENTS = {
   'csp-no-inline-style': {
     reference: { title: 'OWASP CSP Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html' },
     suggestion: 'Undgå `unsafe-inline` i `style-src`; brug nonces/hashes.',
+  },
+  'http2': {
+    reference: { title: 'HTTP/2 (RFC 7540)', url: 'https://www.rfc-editor.org/rfc/rfc7540' },
+    suggestion: 'Aktivér HTTP/2 på webserveren for bedre performance.',
+  },
+  'http3': {
+    reference: { title: 'HTTP/3 (RFC 9114)', url: 'https://www.rfc-editor.org/rfc/rfc9114' },
+    suggestion: 'Aktivér HTTP/3 (QUIC) for endnu lavere latency.',
+  },
+  'ct-logs': {
+    reference: { title: 'Certificate Transparency', url: 'https://certificate.transparency.dev/' },
+    suggestion: 'Sørg for at certifikatet er logget i CT-logs (de fleste CA’er gør dette automatisk).',
+  },
+  'x-xss-protection': {
+    reference: { title: 'OWASP Secure Headers Project', url: 'https://owasp.org/www-project-secure-headers/' },
+    suggestion: 'Sæt `X-XSS-Protection: 0` (deaktiver legacy filter) eller fjern headeren.',
+  },
+  'clear-site-data': {
+    reference: { title: 'MDN — Clear-Site-Data', url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Clear-Site-Data' },
+    suggestion: 'Brug `Clear-Site-Data` ved logout for at rydde browserdata.',
+  },
+  dkim: {
+    reference: { title: 'RFC 6376 — DKIM', url: 'https://www.rfc-editor.org/rfc/rfc6376' },
+    suggestion: 'Publicér DKIM DNS-record (`<selector>._domainkey.<domæne>`) og signer udgående mail.',
   },
 };
 
@@ -676,6 +701,36 @@ async function scan(targetUrl) {
   // CSP no inline style
   const cspInlineStyle = !!csp && /style-src[^;]*unsafe-inline/i.test(csp);
   checks.push({ id: 'csp-no-inline-style', title: 'CSP style-src uden unsafe-inline', category: 'Sikkerhedsheaders', pass: !!csp && !cspInlineStyle, detail: csp ? (cspInlineStyle ? 'style-src indeholder unsafe-inline.' : 'OK.') : 'CSP mangler.', weight: 4 });
+
+  // HTTP/2 & HTTP/3 (via ALPN)
+  const alpn = (tlsData && tlsData.alpn) || '';
+  checks.push({ id: 'http2', title: 'HTTP/2 support', category: 'Performance', pass: /h2/.test(alpn), detail: alpn ? `ALPN: ${alpn}` : 'Ingen ALPN-info.', weight: 3 });
+  checks.push({ id: 'http3', title: 'HTTP/3 support', category: 'Performance', pass: /h3/.test(alpn), detail: alpn ? `ALPN: ${alpn}` : 'Ingen ALPN-info.', weight: 3 });
+
+  // Certificate Transparency (best-effort: check crt.sh)
+  let ctOk = false;
+  try {
+    const r = await fetchUrl(`https://crt.sh/?q=${encodeURIComponent(hostname)}&output=json`);
+    ctOk = r.status === 200 && r.body && r.body.includes(hostname);
+  } catch (e) { ctOk = false; }
+  checks.push({ id: 'ct-logs', title: 'Certificate Transparency (crt.sh)', category: 'Kryptering', pass: ctOk, detail: ctOk ? 'Certifikat fundet i CT-logs.' : 'Kunne ikke verificere CT-logs.', weight: 3 });
+
+  // X-XSS-Protection
+  const xss = h('x-xss-protection');
+  checks.push({ id: 'x-xss-protection', title: 'X-XSS-Protection', category: 'Sikkerhedsheaders', pass: xss === '0' || !xss, detail: xss ? `X-XSS-Protection: ${xss}` : 'Header mangler (OK for moderne browsere).', weight: 2 });
+
+  // Clear-Site-Data
+  const csd = h('clear-site-data');
+  checks.push({ id: 'clear-site-data', title: 'Clear-Site-Data header', category: 'Session', pass: !!csd, detail: csd ? `Clear-Site-Data: ${csd}` : 'Clear-Site-Data mangler.', weight: 2 });
+
+  // DKIM
+  let dkim = false;
+  try {
+    // try common selector
+    const r = await dns.resolveTxt('default._domainkey.' + hostname);
+    dkim = Array.isArray(r) && r.length > 0;
+  } catch (e) { dkim = false; }
+  checks.push({ id: 'dkim', title: 'DKIM (mail)', category: 'DNS-sikkerhed', pass: dkim, detail: dkim ? 'DKIM fundet.' : 'Ingen DKIM (selector "default").', weight: 3 });
 
   // Score
   const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
